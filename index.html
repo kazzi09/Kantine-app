@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Kantine App</title>
+</head>
+<body>
+  <!-- Mevcut HTML içerik buraya gelecek -->
+  <h1>Welkom bij Kantine App</h1>
+
+  <!-- Firebase ve Analytics -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/12.10.0/firebase-app.js";
+    import { getAnalytics } from "https://www.gstatic.com/firebasejs/12.10.0/firebase-analytics.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyD-3UxsZ8KCpkZzOqEixQm-qQuhnytHSgI",
+      authDomain: "kantine-app-67c58.firebaseapp.com",
+      databaseURL: "https://kantine-app-67c58-default-rtdb.europe-west1.firebasedatabase.app",
+      projectId: "kantine-app-67c58",
+      storageBucket: "kantine-app-67c58.firebasestorage.app",
+      messagingSenderId: "41940147235",
+      appId: "1:41940147235:web:969adb712cf64c6caa6596",
+      measurementId: "G-0576RRPT5X"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const analytics = getAnalytics(app);
+  </script>
+
+  <!-- Yeni database scripti -->
+  <script type="module">
+    const newOrders = [
+      {
+        id: 101,
+        orderNumber: 1001,
+        name: "Ahmet Yilmaz",
+        items: { 1: 1, 3: 2 },
+        itemNames: ["Soep v/de dag","Brood/Bread/Hljeb (2 st.)"],
+        timestamp: "2026-03-02T10:00:00Z",
+        status: "waiting",
+        date: "02-03-2026"
+      },
+      {
+        id: 102,
+        orderNumber: 1002,
+        name: "Ayşe Kaya",
+        items: { 2: 1 },
+        itemNames: ["Rauwkost salade"],
+        timestamp: "2026-03-02T10:05:00Z",
+        status: "ready",
+        date: "02-03-2026"
+      },
+      {
+        id: 103,
+        orderNumber: 1003,
+        name: "Mehmet Demir",
+        items: { 4: 1, 5: 1 },
+        itemNames: ["Cevapcici met somun 5 st. met brood","Hamburger 100g met brood"],
+        timestamp: "2026-03-02T10:10:00Z",
+        status: "waiting",
+        date: "02-03-2026"
+      }
+    ];
+
+    // Global orders array ve localStorage güncelle
+    window.orders = newOrders;
+    localStorage.setItem('kantine_orders_backup', JSON.stringify(newOrders));
+
+    // UI ve istatistikleri güncelle
+    if (typeof updateAdminStats === 'function') updateAdminStats();
+    if (typeof renderOrders === 'function') renderOrders();
+    if (typeof updateFoodSummary === 'function') updateFoodSummary();
+    if (typeof showSyncStatus === 'function') showSyncStatus('synced', 'Nieuwe database geladen');
+  </script>
+</body>
+</html>
