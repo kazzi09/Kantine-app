@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <title>Kantine App</title>
+    <style>
+        /* Basit stil örneği, kendi stilinle değiştirilebilir */
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .hidden { display: none; }
+        .status { margin-top: 10px; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <h1>Kantine Bestellingen</h1>
+
+    <div id="order-screen">
+        <input type="text" id="name-input" placeholder="Naam">
+        <button onclick="sendOrder()">Bestel</button>
+    </div>
+
+    <div id="success-screen" class="hidden">
+        <h2>Bestelling Verzonden!</h2>
+        <p>Order #: <span id="success-id"></span></p>
+        <p>Naam: <span id="success-name"></span></p>
+        <div id="success-items"></div>
+        <button onclick="showScreen('order-screen')">Nieuwe Bestelling</button>
+    </div>
+
+    <div class="status" id="sync-status"></div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/12.10.0/firebase-app.js";
+        import { getDatabase, ref, set, get } from "https://www.gstatic.com/firebasejs/12.10.0/firebase-database.js";
+
+        // Firebase config
+        const firebaseConfig = {
+            apiKey: "AIzaSyD-3UxsZ8KCpkZzOqEixQm-qQuhnytHSgI",
+            authDomain: "kantine-app-67c58.firebaseapp.com",
+            databaseURL: "https://kantine-app-67c58-default-rtdb.europe-west1.firebasedatabase.app",
+            projectId: "kantine-app-67c58",
+            storageBucket: "kantine-app-67c58.firebasestorage.app",
+            messagingSenderId: "41940147235",
+            appId: "1:41940147235:web:969adb712cf64c6caa6596",
+            measurementId: "G-0576RRPT5X"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getDatabase(app);
+
+        // Global orders objesi
+        let orders = {};
+        let currentOrder = { name: '', items: {} };
+
+        // Durum mesajı göster
+        function showSyncStatus(status, message) {
+            const el = document.getElementById('sync-status');
+            el.textContent = message;
+            el.style.color = status === 'error' ? 'red' : (status === 'syncing' ? 'blue' : 'green');
+        }
+
+        // Ekran geçişi
+        function showScreen(screenId) {
+            document.getElementById('order-screen').classList.add('hidden');
+            document.getElementById('success-screen').classList.add('hidden');
+            document.getElementById(screenId).classList.remove('hidden');
+        }
+
+        // Firebase’den siparişleri çek
+        async function fetchOrdersFromCloud() {
+            try {
+                const snapshot = await get(ref(db, 'orders'));
+                if (snapshot.exists()) {
+                    orders = snapshot.val();
+                    localStorage.setItem('kantine_orders_backup', JSON.stringify(orders));
+                    showSyncStatus('synced', 'Verbonden met Firebase');
+                } else {
+                    orders = {};
+                }
+            } catch (error) {
+                console.error('Fetch Firebase error:', error);
+                orders = JSON.parse(localStorage.getItem('kantine_orders_backup')) || {};
+                showSyncStatus('error', 'Fout bij laden Firebase');
+            }
+        }
+
+        // Firebase’e sipariş kaydet
+        async function saveOrdersToCloud() {
+            showSyncStatus('syncing', 'Opslaan...');
+            try {
+                await set(ref(db, 'orders'), orders);
+                localStorage.setItem('kantine_orders_backup', JSON.stringify(orders));
+                showSyncStatus('synced', 'Opgeslagen in Firebase');
+            } catch (error) {
+                console.error('Save Firebase error:', error);
+                showSyncStatus('error', 'Fout bij opslaan');
+            }
+        }
+
+        // Sipariş gönder
+        async function sendOrder() {
+            const nameInput = document.getElementById('name-input').value.trim();
+            if (!nameInput) return alert('Vul een naam in!');
+            currentOrder.name = nameInput;
+
+            // Örnek item, istersen form ile ekleyebilirsin
+            currentOrder.items = { broodje: 1, koffie: 2 };
+            const newOrderId = Date.now();
+            const newOrder = {
+                id: newOrderId,
+                orderNumber: Math.floor(1000 + Math.random() * 9000),
+                name: currentOrder.name,
+                items: { ...currentOrder.items },
+                itemNames: Object.keys(currentOrder.items),
+                timestamp: new Date().toISOString(),
+                status: 'waiting',
+                date: new Date().toLocaleDateString('nl-NL')
+            };
+
+            orders[newOrderId] = newOrder;
+            await saveOrdersToCloud();
+
+            // Başarı ekranı
+            document.getElementById('success-id').textContent = '#' + newOrder.orderNumber;
+            document.getElementById('success-name').textContent = newOrder.name;
+            document.getElementById('success-items').innerHTML = newOrder.itemNames.map(name =>
+                `<div style="padding: 4px 0; border-bottom: 1px solid #e2e8f0;">${name}</div>`
+            ).join('');
+
+            showScreen('success-screen');
+            currentOrder = { name: '', items: {} };
+            document.getElementById('name-input').value = '';
+        }
+
+        // Başlangıçta Firebase’den siparişleri çek
+        fetchOrdersFromCloud();
+    </script>
+</body>
+</html>
