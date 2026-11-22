@@ -1,0 +1,1424 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Stock Counting / Voorraadtelling</title>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+<script src="https://unpkg.com/@zxing/library@0.21.3/umd/index.min.js"></script>
+<style>
+:root{
+  --bg:#f4f6f9;
+  --surface:#ffffff;
+  --ink:#172033;
+  --muted:#667085;
+  --line:#e3e7ee;
+  --navy:#172b4d;
+  --blue:#175cd3;
+  --blue-hover:#1249a8;
+  --ok-bg:#ecfdf3;
+  --ok-fg:#027a48;
+  --err-bg:#fff1f0;
+  --err-fg:#b42318;
+  --warn-bg:#fffaeb;
+  --warn-fg:#b54708;
+}
+*{box-sizing:border-box}
+body{margin:0;padding:20px;font-family:system-ui,-apple-system,Arial,sans-serif;color:var(--ink);background:var(--bg)}
+.app{max-width:980px;margin:0 auto}
+header{background:var(--navy);color:#fff;padding:18px 22px;border-radius:14px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+h1{margin:0 0 4px;font-size:21px;letter-spacing:.2px}
+h2{margin:0 0 8px;font-size:18px}
+p{line-height:1.45;margin:6px 0}
+.muted{color:var(--muted);font-size:13.5px}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px;margin:14px 0}
+label{display:block;font-weight:700;font-size:13.5px;margin:12px 0 6px}
+input,select,button{font:inherit;padding:11px 12px;border:1px solid #cbd3df;border-radius:9px;background:#fff;color:var(--ink)}
+input:focus,select:focus{outline:2px solid #84adff;border-color:var(--blue)}
+input[type="file"],input[type="text"],input[type="number"],input[type="password"],select{width:100%}
+button{background:var(--blue);color:#fff;border:0;font-weight:700;cursor:pointer;transition:background .15s}
+button:hover:not(:disabled){background:var(--blue-hover)}
+button:disabled{opacity:.45;cursor:not-allowed}
+button.secondary{background:#eef2f6;color:var(--ink)}
+button.secondary:hover:not(:disabled){background:#e2e8f0}
+button.danger{background:#fef3f2;color:#b42318;border:1px solid #fecdca;padding:6px 10px;font-size:12px;border-radius:7px}
+button.danger:hover:not(:disabled){background:#fee4e2}
+.nav-tabs{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.nav-btn{background:rgba(255,255,255,.14);color:#fff;padding:8px 14px;border-radius:9px;font-size:13px;font-weight:700}
+.nav-btn.active{background:#fff;color:var(--navy)}
+.nav-btn:hover:not(.active){background:rgba(255,255,255,.24)}
+.full-btn{width:100%;margin-top:12px}
+.row-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.scan-row{display:flex;gap:8px;align-items:stretch}
+.scan-row input{flex:1}
+.scan-btn{white-space:nowrap;padding:11px 14px;background:#0f766e}
+.scan-btn:hover:not(:disabled){background:#115e59}
+.lock-row{display:flex;align-items:center;gap:8px;margin-top:8px;font-size:13px;color:var(--muted)}
+.lock-row input{width:auto;margin:0}
+.status{padding:11px 13px;border-radius:9px;background:#eef4ff;margin-top:12px;font-size:14px}
+.error{background:var(--err-bg);color:var(--err-fg)}
+.success{background:var(--ok-bg);color:var(--ok-fg)}
+.warn{background:var(--warn-bg);color:var(--warn-fg)}
+.item{border:1px solid var(--line);padding:14px;border-radius:11px;margin:10px 0;background:#fcfcfd}
+.item-head{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap}
+.badge{display:inline-block;padding:3px 9px;border-radius:999px;font-size:12px;font-weight:700;background:#eef2f6;color:var(--ink)}
+.badge.ok{background:var(--ok-bg);color:var(--ok-fg)}
+.badge.diff{background:var(--err-bg);color:var(--err-fg)}
+.hidden{display:none}
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:12px 0}
+.kpi{border:1px solid var(--line);border-radius:10px;padding:11px;background:#f8fafc}
+.kpi .lbl{font-size:11.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px}
+.kpi .val{font-size:20px;font-weight:800;margin-top:3px}
+.table-wrap{overflow-x:auto;margin-top:12px}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th,td{text-align:left;padding:9px 8px;border-bottom:1px solid #e5e7eb;vertical-align:middle}
+th{background:#f8fafc;font-weight:700}
+td input.inline-qty{width:84px;padding:6px 8px;border-radius:7px}
+.small{font-size:12px;color:var(--muted);margin-top:3px}
+.cam-box{margin-top:12px;border:1px solid #cbd3df;border-radius:12px;padding:12px;background:#0f172a;color:#fff}
+.cam-video-wrap{position:relative;overflow:hidden;border-radius:9px;background:#000;max-height:300px}
+video{width:100%;max-height:300px;object-fit:cover;display:block}
+.crosshair{position:absolute;left:6%;right:6%;top:50%;height:3px;background:rgba(239,68,68,.9);box-shadow:0 0 10px rgba(239,68,68,.95);pointer-events:none}
+.pill-tag{background:rgba(255,255,255,.14);color:#fff;padding:5px 10px;border-radius:999px;font-size:12px;font-weight:600}
+.diag-box{margin-top:8px;padding:8px 10px;border-radius:8px;background:rgba(255,255,255,.08);font-size:12px;color:#e2e8f0}
+@media(max-width:720px){.kpis{grid-template-columns:1fr 1fr}}
+@media(max-width:600px){body{padding:12px}.grid{grid-template-columns:1fr}.scan-row{flex-wrap:wrap}.scan-btn{width:100%}}
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div>
+      <h1>STOCK COUNTING / VOORRAADTELLING</h1>
+      <div>LOCATION SCAN &rarr; SSCC SCAN &rarr; LIVE STOCK COUNT</div>
+    </div>
+    <div class="nav-tabs">
+      <span class="pill-tag" id="dbBadge">DB: Connecting...</span>
+      <button type="button" class="nav-btn active" id="tabScannerBtn">Scanner / Sayım</button>
+      <button type="button" class="nav-btn" id="tabAdminBtn">Admin</button>
+    </div>
+  </header>
+
+  <!-- ==================== SCANNER VIEW (ONLY NAME + COUNTING) ==================== -->
+  <div id="scannerPage">
+    <!-- STEP 1: NAME ENTRY -->
+    <section class="panel" id="nameEntryPanel">
+      <h2>1. Enter Your Name to Start / Naam invoeren om te starten</h2>
+      <p class="muted">Enter your name and start counting directly. Stock data is loaded live from the admin.</p>
+      <label for="scannerNameInput">Scanner Name / Naam scanner</label>
+      <input id="scannerNameInput" type="text" maxlength="80" placeholder="Enter your name / Voer uw naam in" autocomplete="name">
+      <button type="button" class="full-btn" id="startCountingBtn">START COUNTING / TELLING STARTEN</button>
+      <div id="stockSyncStatus" class="status">Connecting to Realtime Database...</div>
+    </section>
+
+    <!-- STEP 2: SCANNING & COUNTING -->
+    <div id="countingWorkspace" class="hidden">
+      <section class="panel">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+          <div>
+            <h2 style="margin:0">2. Scan LOCATION &amp; SSCC</h2>
+            <div class="muted">Scanner: <b id="activeScannerLabel">--</b></div>
+          </div>
+          <button type="button" class="secondary" id="changeNameBtn" style="padding:8px 12px;font-size:13px">Change Name / Naam wijzigen</button>
+        </div>
+
+        <label for="location">Scan / Enter LOCATION</label>
+        <div class="scan-row">
+          <input id="location" type="text" placeholder="e.g. A100 (leave blank to search by SSCC)" autocomplete="off" enterkeyhint="next">
+          <button type="button" class="scan-btn" id="camLocBtn">CAMERA LOC</button>
+        </div>
+        <div class="lock-row">
+          <input id="lockLoc" type="checkbox">
+          <label for="lockLoc" style="margin:0;font-weight:600;cursor:pointer">Lock LOCATION for next SSCC scans</label>
+        </div>
+
+        <label for="sscc">Scan SSCC (Phone Camera or Handheld Scanner)</label>
+        <div class="scan-row">
+          <input id="sscc" type="text" placeholder="Scan or enter SSCC (00 / (00) supported)" autocomplete="off" enterkeyhint="search">
+          <button type="button" class="scan-btn" id="camSsccBtn">SCAN SSCC</button>
+        </div>
+
+        <div id="camBox" class="cam-box hidden">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap">
+            <strong id="camTitle">Camera Barcode Scanner</strong>
+            <div style="display:flex;gap:6px;flex-wrap:wrap">
+              <button type="button" class="secondary" id="snapScanBtn" style="padding:6px 10px;font-size:12px">Scan Photo Now</button>
+              <button type="button" class="secondary" id="torchBtn" style="padding:6px 10px;font-size:12px">Flash: Off</button>
+              <button type="button" class="danger" id="stopCamBtn">Close</button>
+            </div>
+          </div>
+          <div class="cam-video-wrap">
+            <video id="camVideo" playsinline autoplay muted></video>
+            <div class="crosshair"></div>
+          </div>
+          <div id="camStatus" class="small" style="color:#cbd5e1;margin-top:8px">Starting camera...</div>
+          <div id="camDiag" class="diag-box">Checking barcode engine...</div>
+          <div class="row-actions" style="margin-top:8px">
+            <label class="secondary" style="padding:7px 11px;font-size:12px;border-radius:8px;cursor:pointer;margin:0">
+              Take / Choose Barcode Photo
+              <input id="photoBarcodeInput" type="file" accept="image/*" capture="environment" style="display:none">
+            </label>
+          </div>
+          <div id="manualCamRow" class="scan-row" style="margin-top:8px">
+            <input id="manualScanInput" type="text" placeholder="Handheld scanner or type barcode manually">
+            <button type="button" id="applyManualScan">Apply</button>
+          </div>
+        </div>
+
+        <button type="button" class="full-btn" id="find" disabled>FIND SSCC / SSCC ZOEKEN</button>
+        <div id="lookupStatus" class="status">Waiting for stock data...</div>
+      </section>
+
+      <section class="panel hidden" id="countPanel">
+        <h2>3. Stock Count / Voorraadtelling</h2>
+        <div id="palletInfo"></div>
+        <div id="products"></div>
+        <button type="button" class="full-btn" id="saveCount">SAVE COUNT TO LIVE DB / TELLING OPSLAAN</button>
+        <div id="saveStatus" class="status hidden"></div>
+      </section>
+
+      <section class="panel">
+        <h2>Live Count Summary / Tellingsoverzicht</h2>
+        <div class="kpis">
+          <div class="kpi"><div class="lbl">Counted Lines</div><div class="val" id="kpiLines">0</div></div>
+          <div class="kpi"><div class="lbl">Exact Matches</div><div class="val" id="kpiMatch">0</div></div>
+          <div class="kpi"><div class="lbl">Short / Over</div><div class="val" id="kpiDiff">0</div></div>
+          <div class="kpi"><div class="lbl">Net Difference</div><div class="val" id="kpiNet">0</div></div>
+        </div>
+
+        <div class="grid" style="margin-top:10px">
+          <div>
+            <label for="filterText" style="margin-top:0">Search (Scanner, LOCATION, SSCC, Product)</label>
+            <input id="filterText" type="text" placeholder="Filter...">
+          </div>
+          <div>
+            <label for="filterMode" style="margin-top:0">Status Filter</label>
+            <select id="filterMode">
+              <option value="all">All / Alles</option>
+              <option value="diff">Differences only (Short / Over)</option>
+              <option value="match">Exact matches only</option>
+            </select>
+          </div>
+        </div>
+
+        <div id="summary" class="muted" style="margin-top:10px">No count records yet.</div>
+        <div class="table-wrap hidden" id="summaryTableWrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Scanner Name</th>
+                <th>LOCATION</th>
+                <th>SSCC</th>
+                <th>Product</th>
+                <th>System</th>
+                <th>Counted</th>
+                <th>Difference</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody id="summaryBody"></tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <!-- ==================== ADMIN LOGIN SCREEN ==================== -->
+  <section class="panel hidden" id="adminLoginPage">
+    <h2>Admin Login / Beheerder</h2>
+    <p class="muted">Enter admin password to upload stock files and manage live results.</p>
+    <label for="adminPassInput">Password / Wachtwoord</label>
+    <input id="adminPassInput" type="password" placeholder="admin123">
+    <div class="row-actions">
+      <button type="button" id="adminLoginBtn">Login / Inloggen</button>
+      <button type="button" class="secondary" id="adminBackBtn">Back to Scanner</button>
+    </div>
+    <div id="adminLoginStatus" class="status hidden"></div>
+  </section>
+
+  <!-- ==================== ADMIN WORKSPACE ==================== -->
+  <div id="adminPage" class="hidden">
+    <section class="panel">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+        <div>
+          <h2 style="margin:0">Admin – 1. Upload Stock File to Realtime DB</h2>
+          <div class="muted">Upload Excel (.xlsx, .xlsm, .xls), CSV or TSV to publish stock rows for all scanners.</div>
+        </div>
+        <button type="button" class="secondary" id="adminLogoutBtn" style="padding:8px 12px;font-size:13px">Lock Admin / Uitloggen</button>
+      </div>
+
+      <input id="file" type="file" accept=".csv,.tsv,.txt,.xlsx,.xlsm,.xls" style="margin-top:12px">
+      <div class="row-actions">
+        <button type="button" class="secondary" id="loadSample">Load Sample Stock Data</button>
+        <button type="button" class="danger" id="clearStockDb">Clear Stock in DB</button>
+      </div>
+      <div id="uploadStatus" class="status">No file uploaded yet.</div>
+
+      <div id="sheetBox" class="hidden">
+        <label for="sheetSelect">Select Worksheet (Excel)</label>
+        <select id="sheetSelect"></select>
+      </div>
+
+      <div id="mapping" class="hidden">
+        <p><b>Column Mapping / Kolomtoewijzing</b></p>
+        <div class="grid">
+          <div><label for="locCol">LOCATION Column</label><select id="locCol"></select></div>
+          <div><label for="ssccCol">SSCC Column</label><select id="ssccCol"></select></div>
+          <div><label for="nameCol">Product Name Column</label><select id="nameCol"></select></div>
+          <div><label for="qtyCol">System Quantity Column</label><select id="qtyCol"></select></div>
+        </div>
+        <button type="button" class="full-btn" id="publishStockBtn">Publish Stock to Realtime DB / Voorraad publiceren</button>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>Admin – 2. Live Scanner Count Results</h2>
+      <div class="kpis">
+        <div class="kpi"><div class="lbl">Active Stock Rows</div><div class="val" id="adminKpiStock">0</div></div>
+        <div class="kpi"><div class="lbl">Counted Lines</div><div class="val" id="adminKpiLines">0</div></div>
+        <div class="kpi"><div class="lbl">Short / Over Lines</div><div class="val" id="adminKpiDiffs">0</div></div>
+        <div class="kpi"><div class="lbl">Net Difference</div><div class="val" id="adminKpiNet">0</div></div>
+      </div>
+
+      <div class="grid">
+        <div>
+          <label for="adminFilterText" style="margin-top:0">Search (Scanner, LOCATION, SSCC, Product)</label>
+          <input id="adminFilterText" type="text" placeholder="Filter...">
+        </div>
+        <div>
+          <label for="adminFilterMode" style="margin-top:0">Status Filter</label>
+          <select id="adminFilterMode">
+            <option value="all">All / Alles</option>
+            <option value="diff">Differences only (Short / Over)</option>
+            <option value="match">Exact matches only (0)</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="row-actions">
+        <button type="button" id="exportCsv" disabled>Download Results (CSV)</button>
+        <button type="button" class="secondary" id="exportXlsx" disabled>Download Results (Excel .xlsx)</button>
+        <button type="button" class="danger" id="clearCountResults">Clear All Count Results</button>
+      </div>
+
+      <div id="adminSummaryText" class="muted" style="margin-top:10px">No count records in Realtime Database yet.</div>
+      <div class="table-wrap hidden" id="adminTableWrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Scanner Name</th>
+              <th>LOCATION</th>
+              <th>SSCC</th>
+              <th>Product</th>
+              <th>System</th>
+              <th>Counted</th>
+              <th>Difference</th>
+              <th>Time</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody id="adminSummaryBody"></tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+</div>
+
+<script>
+const firebaseConfig = {
+  apiKey: "AIzaSyD-3UxsZ8KCpkZzOqEixQm-qQuhnytHSgI",
+  authDomain: "kantine-app-67c58.firebaseapp.com",
+  databaseURL: "https://kantine-app-67c58-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId: "kantine-app-67c58",
+  storageBucket: "kantine-app-67c58.firebasestorage.app",
+  messagingSenderId: "41940147235",
+  appId: "1:41940147235:web:969adb712cf64c6caa6596",
+  measurementId: "G-0576RRPT5X"
+};
+
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
+const stockRef = db.ref('voorraad/stockRows');
+const resultsRef = db.ref('voorraad/countResults');
+
+const ADMIN_PASSWORD = 'admin123';
+const NAME_KEY = 'voorraad_scanner_name_v1';
+
+let rows = [], current = [], results = [];
+let rawRows = [], headers = [], xlsxSheets = {};
+let scannerName = '';
+let adminUnlocked = false;
+let camStream = null, camTimer = null, camTarget = 'sscc', torchOn = false;
+let scannerBurstTimer = null, barcodeDetector = null;
+let lastScanAttemptInfo = 'No frame analyzed yet';
+
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+function switchPage(page){
+  stopCamera();
+  $('scannerPage').classList.toggle('hidden', page !== 'scanner');
+  $('adminLoginPage').classList.toggle('hidden', page !== 'adminLogin');
+  $('adminPage').classList.toggle('hidden', page !== 'admin');
+  $('tabScannerBtn').classList.toggle('active', page === 'scanner');
+  $('tabAdminBtn').classList.toggle('active', page !== 'scanner');
+  if (page === 'adminLogin'){
+    $('adminLoginStatus').classList.add('hidden');
+    $('adminPassInput').value = '';
+    setTimeout(() => $('adminPassInput').focus(), 50);
+  }
+}
+
+$('tabScannerBtn').addEventListener('click', () => switchPage('scanner'));
+$('tabAdminBtn').addEventListener('click', () => switchPage(adminUnlocked ? 'admin' : 'adminLogin'));
+$('adminBackBtn').addEventListener('click', () => switchPage('scanner'));
+$('adminLogoutBtn').addEventListener('click', () => { adminUnlocked = false; switchPage('scanner'); });
+
+$('adminLoginBtn').addEventListener('click', () => {
+  if ($('adminPassInput').value === ADMIN_PASSWORD){
+    adminUnlocked = true;
+    switchPage('admin');
+  } else {
+    $('adminLoginStatus').className = 'status error';
+    $('adminLoginStatus').textContent = 'Wrong password / Verkeerd wachtwoord.';
+    $('adminLoginStatus').classList.remove('hidden');
+  }
+});
+
+$('adminPassInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter'){ e.preventDefault(); $('adminLoginBtn').click(); }
+});
+
+function updateDiag(){
+  if (!$('camDiag')) return;
+  const hasBD = 'BarcodeDetector' in window;
+  const hasZX = !!(window.ZXing && window.ZXing.BrowserMultiFormatReader);
+  const hasMedia = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+  const eng = hasBD && hasZX ? 'BarcodeDetector + ZXing OK' : (hasBD ? 'BarcodeDetector OK' : (hasZX ? 'ZXing OK' : 'Manual/Photo only'));
+  $('camDiag').textContent = `Engine: ${eng} | Camera API: ${hasMedia ? 'OK' : 'Unavailable'} | Protocol: ${window.location.protocol} | Last: ${lastScanAttemptInfo}`;
+}
+
+function parseNum(v){
+  if (typeof v === 'number') return Number.isFinite(v) ? v : 0;
+  const cleaned = String(v ?? '').trim().replace(/\s+/g,'').replace(',','.');
+  const n = Number(cleaned);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function normalizeSSCC(raw){
+  let s = String(raw ?? '').trim();
+  if (!s) return '';
+  if (/^[+-]?\d+(\.\d+)?e[+-]?\d+$/i.test(s)){
+    const num = Number(s);
+    if (Number.isFinite(num)) s = Math.round(num).toString();
+  }
+  s = s.replace(/^\][A-Za-z0-9]{2}/, '');
+  s = s.replace(/^\(00\)/, '');
+  let digits = s.replace(/\D/g, '');
+  if (digits.length === 20 && digits.startsWith('00')) digits = digits.slice(2);
+  if (digits.length > 0 && digits.length < 18) digits = digits.padStart(18, '0');
+  return digits || s.toLowerCase();
+}
+
+function beep(){
+  try{
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if (!Ctx) return;
+    const ctx = new Ctx();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.value = 1046;
+    gain.gain.value = 0.08;
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start();
+    setTimeout(() => { osc.stop(); ctx.close(); }, 110);
+  }catch(_){}
+}
+
+/* ==================== SCANNER FLOW ==================== */
+function enterCountingScreen(name){
+  scannerName = name.trim();
+  localStorage.setItem(NAME_KEY, scannerName);
+  $('activeScannerLabel').textContent = scannerName;
+  $('nameEntryPanel').classList.add('hidden');
+  $('countingWorkspace').classList.remove('hidden');
+  $('find').disabled = rows.length === 0;
+  $('location').focus();
+}
+
+function showNameScreen(){
+  stopCamera();
+  $('scannerNameInput').value = scannerName;
+  $('countingWorkspace').classList.add('hidden');
+  $('nameEntryPanel').classList.remove('hidden');
+  $('scannerNameInput').focus();
+}
+
+$('startCountingBtn').addEventListener('click', () => {
+  const n = $('scannerNameInput').value.trim();
+  if (!n){
+    $('stockSyncStatus').className = 'status error';
+    $('stockSyncStatus').textContent = 'Please enter your name first. / Vul eerst uw naam in.';
+    $('scannerNameInput').focus();
+    return;
+  }
+  enterCountingScreen(n);
+});
+
+$('scannerNameInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter'){ e.preventDefault(); $('startCountingBtn').click(); }
+});
+
+$('changeNameBtn').addEventListener('click', showNameScreen);
+
+function doFind(){
+  if (!scannerName){ showNameScreen(); return; }
+  if (!rows.length){
+    $('lookupStatus').className = 'status error';
+    $('lookupStatus').textContent = 'No stock data in Realtime Database yet. Ask admin to upload stock.';
+    return;
+  }
+  const rawLoc = $('location').value.trim();
+  const rawCode = $('sscc').value.trim();
+  const normCode = normalizeSSCC(rawCode);
+
+  if (!rawCode){
+    $('lookupStatus').className = 'status error';
+    $('lookupStatus').textContent = 'Scan or enter an SSCC barcode first.';
+    $('sscc').focus();
+    return;
+  }
+
+  const bySscc = rows.filter(r => normalizeSSCC(r.sscc) === normCode || r.sscc.toLowerCase() === rawCode.toLowerCase());
+  if (!bySscc.length){
+    $('countPanel').classList.add('hidden');
+    $('lookupStatus').className = 'status error';
+    $('lookupStatus').textContent = `SSCC (${rawCode}) not found in stock list.`;
+    return;
+  }
+
+  let matchedLocLabel = rawLoc;
+  if (rawLoc){
+    current = bySscc.filter(r => r.location.toLowerCase() === rawLoc.toLowerCase());
+    if (!current.length){
+      const locs = [...new Set(bySscc.map(x => x.location))];
+      $('countPanel').classList.add('hidden');
+      $('lookupStatus').className = 'status warn';
+      $('lookupStatus').innerHTML = `SSCC found, but not at LOCATION <b>${esc(rawLoc)}</b>. Found at: <b>${esc(locs.join(', '))}</b>. <button type="button" class="secondary" id="useFoundLocBtn" style="padding:5px 10px;font-size:12px;margin-left:6px">Use ${esc(locs[0])}</button>`;
+      const btn = $('useFoundLocBtn');
+      if (btn) btn.onclick = () => { $('location').value = locs[0]; doFind(); };
+      return;
+    }
+  } else {
+    const locs = [...new Set(bySscc.map(x => x.location))];
+    matchedLocLabel = locs[0];
+    $('location').value = matchedLocLabel;
+    current = bySscc.filter(r => r.location.toLowerCase() === matchedLocLabel.toLowerCase());
+  }
+
+  $('lookupStatus').className = 'status success';
+  $('lookupStatus').textContent = `Found SSCC (${current[0].sscc}) • ${current.length} product line(s) ready.`;
+  $('palletInfo').innerHTML = `<div style="padding:10px 12px;background:#f8fafc;border:1px solid var(--line);border-radius:9px"><b>LOCATION:</b> ${esc(matchedLocLabel)} &nbsp;|&nbsp; <b>SSCC:</b> ${esc(current[0].sscc)}</div>`;
+  $('products').innerHTML = '';
+
+  current.forEach((r, i) => {
+    const sysNum = parseNum(r.systemQty);
+    const d = document.createElement('div');
+    d.className = 'item';
+    d.innerHTML = `
+      <div class="item-head">
+        <div>
+          <strong>${esc(r.name || 'Product')}</strong>
+          <div class="small">System qty: <b class="sysVal">${esc(r.systemQty || '0')}</b></div>
+        </div>
+        <span class="badge" id="liveBadge_${i}">Waiting</span>
+      </div>
+      <label for="countInput_${i}">Physical Counted Quantity</label>
+      <input type="number" id="countInput_${i}" min="0" step="any" class="countQty" data-index="${i}" data-sys="${sysNum}" placeholder="Enter counted quantity">
+    `;
+    $('products').appendChild(d);
+  });
+
+  document.querySelectorAll('.countQty').forEach(inp => {
+    const updateBadge = () => {
+      const badge = $(`liveBadge_${inp.dataset.index}`);
+      if (!badge) return;
+      if (inp.value === ''){ badge.className = 'badge'; badge.textContent = 'Waiting'; return; }
+      const diff = Number(inp.value) - (Number(inp.dataset.sys) || 0);
+      if (diff === 0){ badge.className = 'badge ok'; badge.textContent = 'Exact Match (0)'; }
+      else { badge.className = 'badge diff'; badge.textContent = diff > 0 ? `Over (+${diff})` : `Short (${diff})`; }
+    };
+    inp.addEventListener('input', updateBadge);
+    inp.addEventListener('keydown', e => {
+      if (e.key === 'Enter'){
+        e.preventDefault();
+        const all = [...document.querySelectorAll('.countQty')];
+        const pos = all.indexOf(inp);
+        if (pos >= 0 && pos < all.length - 1) all[pos + 1].focus();
+        else $('saveCount').click();
+      }
+    });
+  });
+
+  $('saveStatus').classList.add('hidden');
+  $('countPanel').classList.remove('hidden');
+  const firstInp = document.querySelector('.countQty');
+  if (firstInp) firstInp.focus();
+}
+
+$('find').addEventListener('click', doFind);
+
+$('location').addEventListener('keydown', e => {
+  if ((e.key === 'Enter' || e.key === 'Tab') && $('location').value.trim()){
+    e.preventDefault();
+    $('sscc').focus();
+    $('sscc').select();
+  }
+});
+
+$('sscc').addEventListener('keydown', e => {
+  if (e.key === 'Enter' || e.key === 'NumpadEnter'){
+    e.preventDefault();
+    clearTimeout(scannerBurstTimer);
+    doFind();
+  }
+});
+
+$('sscc').addEventListener('input', () => {
+  clearTimeout(scannerBurstTimer);
+  const digits = normalizeSSCC($('sscc').value);
+  if (digits.length >= 18 && rows.length){
+    scannerBurstTimer = setTimeout(() => {
+      if ($('sscc').value.trim()) doFind();
+    }, 140);
+  }
+});
+
+/* Camera & Barcode Detection */
+let zxingReader = null;
+function getZxingReader(){
+  if (zxingReader) return zxingReader;
+  if (window.ZXing && window.ZXing.BrowserMultiFormatReader){
+    try{
+      zxingReader = new window.ZXing.BrowserMultiFormatReader();
+      return zxingReader;
+    }catch(_){ return null; }
+  }
+  return null;
+}
+
+async function scanWithZxingFallback(sourceEl){
+  const zx = getZxingReader();
+  if (!zx || !sourceEl) return null;
+  const w = sourceEl.videoWidth || sourceEl.naturalWidth || sourceEl.width || 0;
+  const h = sourceEl.videoHeight || sourceEl.naturalHeight || sourceEl.height || 0;
+  if (!w || !h) return null;
+  try{
+    const canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(sourceEl, 0, 0, w, h);
+    const res = await zx.decodeFromCanvas(canvas);
+    const txt = res && (res.getText ? res.getText() : res.text);
+    if (txt){
+      lastScanAttemptInfo = 'Read ZXing';
+      updateDiag();
+      return String(txt);
+    }
+  }catch(_){}
+  return null;
+}
+
+async function getDetector(){
+  if (!('BarcodeDetector' in window)) return null;
+  if (barcodeDetector) return barcodeDetector;
+  try{
+    barcodeDetector = new BarcodeDetector({ formats: ['code_128','ean_13','ean_8','code_39','itf','codabar','qr_code','data_matrix'] });
+    return barcodeDetector;
+  }catch(_){
+    try{ barcodeDetector = new BarcodeDetector(); return barcodeDetector; }catch(_){ return null; }
+  }
+}
+
+async function applyDetectedCode(rawVal){
+  const val = String(rawVal || '').trim();
+  if (!val) return;
+  beep();
+  await stopCamera();
+  if (camTarget === 'location'){
+    $('location').value = val;
+    $('lookupStatus').className = 'status success';
+    $('lookupStatus').textContent = `LOCATION scanned: ${val}. Now scan SSCC.`;
+    $('sscc').focus();
+  } else {
+    $('sscc').value = val;
+    if (rows.length) doFind();
+    else {
+      $('lookupStatus').className = 'status warn';
+      $('lookupStatus').textContent = `SSCC scanned: ${val}. Waiting for stock data...`;
+    }
+  }
+}
+
+async function detectFromCanvas(sourceEl){
+  if (!sourceEl){ lastScanAttemptInfo = 'No source'; updateDiag(); return null; }
+  const w = sourceEl.videoWidth || sourceEl.naturalWidth || sourceEl.width || 0;
+  const h = sourceEl.videoHeight || sourceEl.naturalHeight || sourceEl.height || 0;
+  if (!w || !h){ lastScanAttemptInfo = 'Frame size 0'; updateDiag(); return null; }
+
+  const det = await getDetector();
+  if (det){
+    try{
+      const direct = await det.detect(sourceEl);
+      if (direct && direct.length && direct[0].rawValue){
+        lastScanAttemptInfo = `Read (${direct[0].format || 'barcode'})`;
+        updateDiag();
+        return direct[0].rawValue;
+      }
+    }catch(_){}
+
+    try{
+      const canvas = document.createElement('canvas');
+      const cropH = Math.max(140, Math.round(h * 0.5));
+      const cropY = Math.max(0, Math.round((h - cropH) / 2));
+      const scale = w < 1280 ? 1.5 : 1;
+      canvas.width = Math.round(w * scale);
+      canvas.height = Math.round(cropH * scale);
+      const ctx = canvas.getContext('2d');
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(sourceEl, 0, cropY, w, cropH, 0, 0, canvas.width, canvas.height);
+      const cropped = await det.detect(canvas);
+      if (cropped && cropped.length && cropped[0].rawValue){
+        lastScanAttemptInfo = `Read strip (${cropped[0].format || 'barcode'})`;
+        updateDiag();
+        return cropped[0].rawValue;
+      }
+    }catch(_){}
+  }
+
+  const zxingFound = await scanWithZxingFallback(sourceEl);
+  if (zxingFound) return zxingFound;
+
+  lastScanAttemptInfo = `${w}x${h} scanned (no code)`;
+  updateDiag();
+  return null;
+}
+
+async function stopCamera(){
+  clearInterval(camTimer);
+  camTimer = null;
+  if (camStream){ camStream.getTracks().forEach(t => t.stop()); camStream = null; }
+  torchOn = false;
+  $('torchBtn').textContent = 'Flash: Off';
+  $('camBox').classList.add('hidden');
+}
+
+async function startCamera(target){
+  camTarget = target;
+  $('camTitle').textContent = target === 'location' ? 'Scan LOCATION Barcode' : 'Scan SSCC Barcode';
+  $('camBox').classList.remove('hidden');
+  $('camStatus').textContent = 'Starting camera...';
+  lastScanAttemptInfo = 'Opening camera...';
+  updateDiag();
+
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+    $('camStatus').textContent = 'Camera API unavailable. Use "Take / Choose Barcode Photo" or handheld/manual input below.';
+    $('manualCamRow').classList.remove('hidden');
+    $('manualScanInput').focus();
+    return;
+  }
+
+  try{
+    if (camStream) camStream.getTracks().forEach(t => t.stop());
+    camStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } },
+      audio: false
+    });
+    const video = $('camVideo');
+    video.srcObject = camStream;
+    await video.play();
+    const det = await getDetector();
+    const zx = getZxingReader();
+    updateDiag();
+    if (det || zx){
+      $('camStatus').textContent = 'Align barcode horizontally with the red line (15-25 cm) or tap "Scan Photo Now".';
+      camTimer = setInterval(async () => {
+        if (!camStream || video.readyState < 2) return;
+        const found = await detectFromCanvas(video);
+        if (found) await applyDetectedCode(found);
+      }, 250);
+    } else {
+      $('camStatus').textContent = 'Browser has no live BarcodeDetector. Use "Take / Choose Barcode Photo" or type/scan below:';
+      $('manualCamRow').classList.remove('hidden');
+    }
+  }catch(err){
+    $('camStatus').textContent = `Camera error (${err.message || 'permission'}). Use photo or manual input below:`;
+    $('manualCamRow').classList.remove('hidden');
+    updateDiag();
+  }
+}
+
+$('camLocBtn').addEventListener('click', () => startCamera('location'));
+$('camSsccBtn').addEventListener('click', () => startCamera('sscc'));
+$('stopCamBtn').addEventListener('click', stopCamera);
+
+$('snapScanBtn').addEventListener('click', async () => {
+  const video = $('camVideo');
+  if (!video || video.readyState < 2){ $('camStatus').textContent = 'Camera not ready yet.'; return; }
+  const found = await detectFromCanvas(video);
+  if (found) await applyDetectedCode(found);
+  else {
+    $('camStatus').textContent = 'No barcode in live frame. Try photo capture or manual input below.';
+    $('manualCamRow').classList.remove('hidden');
+  }
+});
+
+$('photoBarcodeInput').addEventListener('change', async e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  $('camStatus').textContent = 'Reading barcode from photo...';
+  const url = URL.createObjectURL(file);
+  const img = new Image();
+  img.onload = async () => {
+    const found = await detectFromCanvas(img);
+    URL.revokeObjectURL(url);
+    if (found) await applyDetectedCode(found);
+    else {
+      $('camStatus').textContent = 'Could not read photo; type or scan below.';
+      $('manualCamRow').classList.remove('hidden');
+      $('manualScanInput').focus();
+    }
+  };
+  img.onerror = () => { URL.revokeObjectURL(url); $('camStatus').textContent = 'Failed to load photo.'; };
+  img.src = url;
+  e.target.value = '';
+});
+
+$('torchBtn').addEventListener('click', async () => {
+  if (!camStream) return;
+  const track = camStream.getVideoTracks()[0];
+  if (!track || !track.getCapabilities) return;
+  const caps = track.getCapabilities();
+  if (!caps.torch){ $('camStatus').textContent = 'Torch not supported on this device.'; return; }
+  torchOn = !torchOn;
+  try{
+    await track.applyConstraints({ advanced: [{ torch: torchOn }] });
+    $('torchBtn').textContent = torchOn ? 'Flash: On' : 'Flash: Off';
+  }catch(_){}
+});
+
+$('applyManualScan').addEventListener('click', async () => {
+  const val = $('manualScanInput').value.trim();
+  if (!val) return;
+  $('manualScanInput').value = '';
+  await applyDetectedCode(val);
+});
+
+$('manualScanInput').addEventListener('keydown', async e => {
+  if (e.key === 'Enter'){ e.preventDefault(); $('applyManualScan').click(); }
+});
+
+$('saveCount').addEventListener('click', async () => {
+  if (!scannerName){ showNameScreen(); return; }
+  const inputs = [...document.querySelectorAll('.countQty')];
+  if (!inputs.length) return;
+  if (inputs.some(x => x.value === '' || !Number.isFinite(Number(x.value)) || Number(x.value) < 0)){
+    $('saveStatus').className = 'status error';
+    $('saveStatus').textContent = 'Enter a valid counted quantity (0 or greater) for every product.';
+    $('saveStatus').classList.remove('hidden');
+    return;
+  }
+
+  $('saveCount').disabled = true;
+  try{
+    const now = Date.now();
+    for (const x of inputs){
+      const r = current[+x.dataset.index];
+      const counted = Number(x.value);
+      const sysVal = parseNum(r.systemQty);
+      await resultsRef.push({
+        location: r.location,
+        sscc: r.sscc,
+        name: r.name,
+        systemQty: r.systemQty,
+        scannerName,
+        counted,
+        variance: +(counted - sysVal).toFixed(4),
+        createdAt: now
+      });
+    }
+    $('saveStatus').className = 'status success';
+    $('saveStatus').textContent = `${inputs.length} count line(s) saved to Realtime Database!`;
+    $('saveStatus').classList.remove('hidden');
+    $('sscc').value = '';
+    if (!$('lockLoc').checked){ $('location').value = ''; $('location').focus(); }
+    else $('sscc').focus();
+  }catch(err){
+    $('saveStatus').className = 'status error';
+    $('saveStatus').textContent = `Save error: ${err.message || err}`;
+    $('saveStatus').classList.remove('hidden');
+  }finally{
+    $('saveCount').disabled = false;
+  }
+});
+
+function renderAllSummaries(){
+  const total = results.length;
+  const matches = results.filter(r => Number(r.variance) === 0).length;
+  const diffs = total - matches;
+  const net = +results.reduce((acc, r) => acc + (Number(r.variance) || 0), 0).toFixed(4);
+  const netStr = net > 0 ? `+${net}` : net;
+
+  $('kpiLines').textContent = total;
+  $('kpiMatch').textContent = matches;
+  $('kpiDiff').textContent = diffs;
+  $('kpiNet').textContent = netStr;
+
+  $('adminKpiStock').textContent = rows.length;
+  $('adminKpiLines').textContent = total;
+  $('adminKpiDiffs').textContent = diffs;
+  $('adminKpiNet').textContent = netStr;
+  $('exportCsv').disabled = total === 0;
+  $('exportXlsx').disabled = total === 0;
+
+  if (!total){
+    $('summary').textContent = 'No count records yet.';
+    $('summaryTableWrap').classList.add('hidden');
+  } else {
+    const q = $('filterText').value.trim().toLowerCase();
+    const mode = $('filterMode').value;
+    const filtered = results.filter(r => {
+      if (mode === 'diff' && Number(r.variance) === 0) return false;
+      if (mode === 'match' && Number(r.variance) !== 0) return false;
+      if (!q) return true;
+      return [r.scannerName, r.location, r.sscc, r.name].some(v => String(v || '').toLowerCase().includes(q));
+    });
+    $('summary').textContent = `Total saved rows: ${total} (Showing: ${filtered.length})`;
+    $('summaryTableWrap').classList.remove('hidden');
+    $('summaryBody').innerHTML = '';
+    filtered.forEach(r => {
+      const tr = document.createElement('tr');
+      const v = Number(r.variance) || 0;
+      const diffBadge = v === 0 ? '<span class="badge ok">0</span>' : `<span class="badge diff">${v > 0 ? '+' + v : v}</span>`;
+      tr.innerHTML = `
+        <td>${esc(r.scannerName || '')}</td>
+        <td>${esc(r.location)}</td>
+        <td>${esc(r.sscc)}</td>
+        <td>${esc(r.name)}</td>
+        <td>${esc(r.systemQty)}</td>
+        <td><input type="number" min="0" step="any" class="inline-qty" data-key="${esc(r._key)}" data-sys="${parseNum(r.systemQty)}" value="${esc(r.counted)}"></td>
+        <td>${diffBadge}</td>
+        <td><button type="button" class="danger" onclick="deleteResult('${esc(r._key)}')">Delete</button></td>
+      `;
+      $('summaryBody').appendChild(tr);
+    });
+    document.querySelectorAll('.inline-qty').forEach(inp => {
+      inp.addEventListener('change', async () => {
+        const val = Number(inp.value);
+        if (!Number.isFinite(val) || val < 0 || !inp.dataset.key) return;
+        const sys = Number(inp.dataset.sys) || 0;
+        await resultsRef.child(inp.dataset.key).update({ counted: val, variance: +(val - sys).toFixed(4) });
+      });
+    });
+  }
+
+  if (!total){
+    $('adminSummaryText').textContent = 'No count records in Realtime Database yet.';
+    $('adminTableWrap').classList.add('hidden');
+  } else {
+    const aq = $('adminFilterText').value.trim().toLowerCase();
+    const amode = $('adminFilterMode').value;
+    const afiltered = results.filter(r => {
+      if (amode === 'diff' && Number(r.variance) === 0) return false;
+      if (amode === 'match' && Number(r.variance) !== 0) return false;
+      if (!aq) return true;
+      return [r.scannerName, r.location, r.sscc, r.name].some(v => String(v || '').toLowerCase().includes(aq));
+    });
+    $('adminSummaryText').textContent = `Total count rows: ${total} (Showing: ${afiltered.length})`;
+    $('adminTableWrap').classList.remove('hidden');
+    $('adminSummaryBody').innerHTML = '';
+    afiltered.forEach(r => {
+      const tr = document.createElement('tr');
+      const v = Number(r.variance) || 0;
+      const badge = v === 0 ? '<span class="badge ok">0</span>' : `<span class="badge diff">${v > 0 ? '+' + v : v}</span>`;
+      const timeStr = r.createdAt ? new Date(r.createdAt).toLocaleTimeString() : '';
+      tr.innerHTML = `
+        <td><b>${esc(r.scannerName || '')}</b></td>
+        <td>${esc(r.location)}</td>
+        <td>${esc(r.sscc)}</td>
+        <td>${esc(r.name)}</td>
+        <td>${esc(r.systemQty)}</td>
+        <td><b>${esc(r.counted)}</b></td>
+        <td>${badge}</td>
+        <td>${esc(timeStr)}</td>
+        <td><button type="button" class="danger" onclick="deleteResult('${esc(r._key)}')">Delete</button></td>
+      `;
+      $('adminSummaryBody').appendChild(tr);
+    });
+  }
+}
+
+window.deleteResult = async function(key){
+  if (!key) return;
+  try{ await resultsRef.child(key).remove(); }catch(_){}
+};
+
+$('filterText').addEventListener('input', renderAllSummaries);
+$('filterMode').addEventListener('change', renderAllSummaries);
+$('adminFilterText').addEventListener('input', renderAllSummaries);
+$('adminFilterMode').addEventListener('change', renderAllSummaries);
+
+/* ==================== ADMIN SPREADSHEET PARSER & EXPORT ==================== */
+function parseLine(line, sep){
+  const out = [];
+  let cur = '', quoted = false;
+  for (let i = 0; i < line.length; i++){
+    const c = line[i];
+    if (c === '"'){
+      if (quoted && line[i+1] === '"'){ cur += '"'; i++; }
+      else quoted = !quoted;
+    } else if (c === sep && !quoted){ out.push(cur.trim()); cur = ''; }
+    else cur += c;
+  }
+  out.push(cur.trim());
+  return out;
+}
+
+function detectSep(text){
+  const line = text.split(/\r?\n/).find(x => x.trim()) || '';
+  const tabs = (line.match(/\t/g) || []).length;
+  const semis = (line.match(/;/g) || []).length;
+  const commas = (line.match(/,/g) || []).length;
+  if (tabs >= semis && tabs >= commas && tabs > 0) return '\t';
+  if (semis >= commas && semis > 0) return ';';
+  return ',';
+}
+
+const CRC_TABLE = (() => {
+  const t = new Uint32Array(256);
+  for (let n = 0; n < 256; n++){
+    let c = n;
+    for (let k = 0; k < 8; k++) c = (c & 1) ? (0xedb88320 ^ (c >>> 1)) : (c >>> 1);
+    t[n] = c >>> 0;
+  }
+  return t;
+})();
+
+function crc32(buf){
+  let c = -1;
+  for (let i = 0; i < buf.length; i++) c = (c >>> 8) ^ CRC_TABLE[(c ^ buf[i]) & 0xff];
+  return (c ^ -1) >>> 0;
+}
+
+async function inflateBytes(bytes){
+  if (typeof DecompressionStream !== 'undefined'){
+    for (const fmt of ['deflate-raw', 'deflate']){
+      try{
+        const ds = new DecompressionStream(fmt);
+        const writer = ds.writable.getWriter();
+        writer.write(bytes);
+        writer.close();
+        const ab = await new Response(ds.readable).arrayBuffer();
+        return new Uint8Array(ab);
+      }catch(_){}
+    }
+  }
+  throw new Error('ZIP/Deflate decompression not supported in this browser.');
+}
+
+async function unzipEntries(arrayBuffer){
+  const view = new DataView(arrayBuffer);
+  const bytes = new Uint8Array(arrayBuffer);
+  const dec = new TextDecoder('utf-8');
+  let eocdOffset = -1;
+  for (let i = bytes.length - 22; i >= Math.max(0, bytes.length - 65557); i--){
+    if (view.getUint32(i, true) === 0x06054b50){ eocdOffset = i; break; }
+  }
+  if (eocdOffset < 0) throw new Error('Invalid .xlsx file.');
+  const cdCount = view.getUint16(eocdOffset + 10, true);
+  let ptr = view.getUint32(eocdOffset + 16, true);
+  const files = {};
+  for (let idx = 0; idx < cdCount; idx++){
+    if (view.getUint32(ptr, true) !== 0x02014b50) break;
+    const method = view.getUint16(ptr + 10, true);
+    const compSize = view.getUint32(ptr + 20, true);
+    const nameLen = view.getUint16(ptr + 28, true);
+    const extraLen = view.getUint16(ptr + 30, true);
+    const commentLen = view.getUint16(ptr + 32, true);
+    const localHdrOffset = view.getUint32(ptr + 42, true);
+    const name = dec.decode(bytes.subarray(ptr + 46, ptr + 46 + nameLen)).replace(/\\/g, '/');
+    ptr += 46 + nameLen + extraLen + commentLen;
+    const lNameLen = view.getUint16(localHdrOffset + 26, true);
+    const lExtraLen = view.getUint16(localHdrOffset + 28, true);
+    const dataStart = localHdrOffset + 30 + lNameLen + lExtraLen;
+    const compData = bytes.subarray(dataStart, dataStart + compSize);
+    if (method === 0) files[name] = compData;
+    else if (method === 8) files[name] = await inflateBytes(compData);
+  }
+  return files;
+}
+
+function colRefToIndex(ref){
+  const m = String(ref || '').match(/^([A-Z]+)/i);
+  if (!m) return 0;
+  let n = 0;
+  const s = m[1].toUpperCase();
+  for (let i = 0; i < s.length; i++) n = n * 26 + (s.charCodeAt(i) - 64);
+  return Math.max(0, n - 1);
+}
+
+function getElementsByLocalName(root, localName){
+  return [...root.getElementsByTagName('*')].filter(el => el.localName === localName);
+}
+
+async function parseXlsxFile(file){
+  const entries = await unzipEntries(await file.arrayBuffer());
+  const dec = new TextDecoder('utf-8');
+  const parser = new DOMParser();
+  const sharedStrings = [];
+  const ssKey = Object.keys(entries).find(k => k.toLowerCase().endsWith('sharedstrings.xml'));
+  if (ssKey){
+    const doc = parser.parseFromString(dec.decode(entries[ssKey]), 'application/xml');
+    getElementsByLocalName(doc, 'si').forEach(si => {
+      sharedStrings.push(getElementsByLocalName(si, 't').map(t => t.textContent || '').join(''));
+    });
+  }
+  const wbKey = Object.keys(entries).find(k => k.toLowerCase().endsWith('xl/workbook.xml')) || Object.keys(entries).find(k => k.toLowerCase().endsWith('workbook.xml'));
+  if (!wbKey) throw new Error('workbook.xml not found.');
+  const wbDoc = parser.parseFromString(dec.decode(entries[wbKey]), 'application/xml');
+  const relMap = {};
+  const relsKey = Object.keys(entries).find(k => k.toLowerCase().endsWith('xl/_rels/workbook.xml.rels')) || Object.keys(entries).find(k => k.toLowerCase().endsWith('workbook.xml.rels'));
+  if (relsKey){
+    const relsDoc = parser.parseFromString(dec.decode(entries[relsKey]), 'application/xml');
+    getElementsByLocalName(relsDoc, 'Relationship').forEach(r => {
+      const id = r.getAttribute('Id'), target = r.getAttribute('Target');
+      if (id && target) relMap[id] = target;
+    });
+  }
+  const sheets = {};
+  getElementsByLocalName(wbDoc, 'sheet').forEach((sh, sPos) => {
+    const name = sh.getAttribute('name') || `Sheet ${sPos + 1}`;
+    const rId = sh.getAttribute('r:id') || sh.getAttributeNS('http://schemas.openxmlformats.org/officeDocument/2006/relationships', 'id') || sh.getAttribute('id');
+    let target = (relMap[rId] || '').replace(/^\/+/, '');
+    if (target && !target.startsWith('xl/') && entries['xl/' + target]) target = 'xl/' + target;
+    if (!target || !entries[target]){
+      const fallbackKeys = Object.keys(entries).filter(k => k.toLowerCase().includes('worksheets/sheet') && k.toLowerCase().endsWith('.xml')).sort();
+      target = fallbackKeys[sPos] || fallbackKeys[0];
+    }
+    if (!target || !entries[target]) return;
+    const sDoc = parser.parseFromString(dec.decode(entries[target]), 'application/xml');
+    const matrix = [];
+    getElementsByLocalName(sDoc, 'row').forEach(rowEl => {
+      const rIdx = Math.max(0, (parseInt(rowEl.getAttribute('r'), 10) || (matrix.length + 1)) - 1);
+      while (matrix.length <= rIdx) matrix.push([]);
+      const rArr = matrix[rIdx];
+      [...rowEl.children].filter(el => el.localName === 'c').forEach((cEl, cPos) => {
+        const ref = cEl.getAttribute('r') || '';
+        const cIdx = ref ? colRefToIndex(ref) : cPos;
+        const type = cEl.getAttribute('t') || '';
+        let val = '';
+        if (type === 'inlineStr') val = getElementsByLocalName(cEl, 't').map(t => t.textContent || '').join('');
+        else {
+          const vEl = [...cEl.children].find(el => el.localName === 'v');
+          const rawV = vEl ? (vEl.textContent || '') : '';
+          if (type === 's') val = sharedStrings[parseInt(rawV, 10)] ?? '';
+          else if (type === 'b') val = rawV === '1' ? 'TRUE' : 'FALSE';
+          else val = rawV;
+        }
+        rArr[cIdx] = String(val ?? '').trim();
+      });
+    });
+    const maxCols = matrix.reduce((m, r) => Math.max(m, r.length), 0);
+    sheets[name] = matrix.map(r => {
+      const line = [];
+      for (let c = 0; c < maxCols; c++) line.push(String(r[c] ?? '').trim());
+      return line;
+    }).filter(r => r.some(cell => cell !== ''));
+  });
+  if (!Object.keys(sheets).length) throw new Error('No readable worksheet found.');
+  return sheets;
+}
+
+function detectHeaderRowIndex(matrix){
+  const kw = ['location','locatie','lokasyon','loc','sscc','pallet','barcode','product','ürün','artikel','qty','quantity','miktar','aantal','stock','voorraad'];
+  let bestIdx = 0, bestScore = -1;
+  for (let i = 0; i < Math.min(matrix.length, 8); i++){
+    const score = matrix[i].map(x => String(x || '').toLowerCase()).reduce((acc, cell) => acc + (kw.some(k => cell.includes(k)) ? 1 : 0), 0);
+    if (score > bestScore){ bestScore = score; bestIdx = i; }
+  }
+  return bestIdx;
+}
+
+function applyMatrixToMapping(matrix, label){
+  if (!matrix || matrix.length < 2){
+    $('uploadStatus').className = 'status error';
+    $('uploadStatus').textContent = `${label} does not contain enough data rows.`;
+    return;
+  }
+  const hIdx = detectHeaderRowIndex(matrix);
+  headers = matrix[hIdx].map((h, i) => h || `Column ${i + 1}`);
+  rawRows = matrix.slice(hIdx + 1).filter(r => r.some(cell => String(cell ?? '').trim() !== ''));
+
+  ['locCol','ssccCol','nameCol','qtyCol'].forEach(id => {
+    const sel = $(id);
+    sel.innerHTML = '';
+    headers.forEach((h, i) => {
+      const opt = document.createElement('option');
+      opt.value = i;
+      opt.textContent = h;
+      sel.appendChild(opt);
+    });
+  });
+
+  const findIdx = terms => headers.findIndex(h => terms.some(t => h.toLowerCase().includes(t)));
+  const presets = [
+    findIdx(['location','locatie','lokasyon','loc']),
+    findIdx(['sscc','pallet','barcode']),
+    findIdx(['description','product','ürün','product name','artikel','omschrijving','naam']),
+    findIdx(['quantity','qty','miktar','aantal','stock','voorraad'])
+  ];
+  ['locCol','ssccCol','nameCol','qtyCol'].forEach((id, i) => {
+    if (presets[i] >= 0) $(id).value = presets[i];
+  });
+
+  $('mapping').classList.remove('hidden');
+  $('uploadStatus').className = 'status success';
+  $('uploadStatus').textContent = `${label}: ${rawRows.length} rows loaded. Verify columns and click "Publish Stock to Realtime DB".`;
+}
+
+$('file').addEventListener('change', async e => {
+  const f = e.target.files[0];
+  if (!f) return;
+  $('sheetBox').classList.add('hidden');
+  $('uploadStatus').className = 'status';
+  $('uploadStatus').textContent = `Reading ${f.name}...`;
+  try{
+    const lower = f.name.toLowerCase();
+    const sig = new Uint8Array(await f.slice(0, 4).arrayBuffer());
+    const isZip = sig.length >= 2 && sig[0] === 0x50 && sig[1] === 0x4b;
+    if (isZip || lower.endsWith('.xlsx') || lower.endsWith('.xlsm')){
+      xlsxSheets = await parseXlsxFile(f);
+      const names = Object.keys(xlsxSheets);
+      if (names.length > 1){
+        const sel = $('sheetSelect');
+        sel.innerHTML = '';
+        names.forEach(n => { const o = document.createElement('option'); o.value = n; o.textContent = n; sel.appendChild(o); });
+        $('sheetBox').classList.remove('hidden');
+      }
+      applyMatrixToMapping(xlsxSheets[names[0]], `${f.name} (${names[0]})`);
+    } else if (lower.endsWith('.xls')){
+      const text = await f.text();
+      if (text.includes('<table') || text.includes('<Table')){
+        const doc = new DOMParser().parseFromString(text, 'text/html');
+        const matrix = [...doc.querySelectorAll('tr')].map(tr => [...tr.querySelectorAll('td,th')].map(td => td.textContent.trim())).filter(r => r.some(Boolean));
+        applyMatrixToMapping(matrix, f.name);
+      } else {
+        throw new Error('Legacy .xls binary format is not supported; save as .xlsx or .csv.');
+      }
+    } else {
+      const text = await f.text();
+      const sep = detectSep(text);
+      const matrix = text.split(/\r?\n/).filter(x => x.trim()).map(l => parseLine(l, sep));
+      applyMatrixToMapping(matrix, f.name);
+    }
+  }catch(err){
+    $('uploadStatus').className = 'status error';
+    $('uploadStatus').textContent = `Upload failed: ${err.message || err}`;
+  }
+});
+
+$('sheetSelect').addEventListener('change', () => {
+  const name = $('sheetSelect').value;
+  if (xlsxSheets[name]) applyMatrixToMapping(xlsxSheets[name], `Sheet: ${name}`);
+});
+
+$('loadSample').addEventListener('click', () => {
+  const sampleMatrix = [
+    ['LOCATION','SSCC','PRODUCT','SYSTEM_QTY'],
+    ['A100','003871234567890123','Balkan Kaşar Peyniri 400g',24],
+    ['A100','003871234567890123','Ajvar Mild 550g',12],
+    ['A102','003871234567890130','Kajmak Cream 200g',18],
+    ['B204','003871234567890147','Ćevapi Frozen 1kg',30],
+    ['B204','003871234567890147','Lepinja Bread 5x120g',15]
+  ];
+  $('sheetBox').classList.add('hidden');
+  applyMatrixToMapping(sampleMatrix, 'Sample Stock Data');
+  $('publishStockBtn').click();
+});
+
+$('publishStockBtn').addEventListener('click', async () => {
+  const ix = { loc: +$('locCol').value, sscc: +$('ssccCol').value, name: +$('nameCol').value, qty: +$('qtyCol').value };
+  if (new Set(Object.values(ix)).size < 4){
+    $('uploadStatus').className = 'status error';
+    $('uploadStatus').textContent = 'Select a different column for each field.';
+    return;
+  }
+  const cleanRows = rawRows.map(r => ({
+    location: String(r[ix.loc] ?? '').trim(),
+    sscc: String(r[ix.sscc] ?? '').trim(),
+    name: String(r[ix.name] ?? '').trim(),
+    systemQty: String(r[ix.qty] ?? '').trim()
+  })).filter(r => r.location && r.sscc);
+
+  if (!cleanRows.length){
+    $('uploadStatus').className = 'status error';
+    $('uploadStatus').textContent = 'No valid LOCATION and SSCC rows found.';
+    return;
+  }
+
+  try{
+    $('publishStockBtn').disabled = true;
+    $('uploadStatus').className = 'status';
+    $('uploadStatus').textContent = `Publishing ${cleanRows.length} stock rows to Realtime Database...`;
+    await stockRef.set(cleanRows);
+    $('uploadStatus').className = 'status success';
+    $('uploadStatus').textContent = `Published ${cleanRows.length} stock rows to Realtime Database! Scanners can now start counting.`;
+  }catch(err){
+    $('uploadStatus').className = 'status error';
+    $('uploadStatus').textContent = `Firebase error: ${err.message || err}`;
+  }finally{
+    $('publishStockBtn').disabled = false;
+  }
+});
+
+$('clearStockDb').addEventListener('click', async () => {
+  if (!confirm('Clear all stock rows from Realtime Database?')) return;
+  try{
+    await stockRef.remove();
+    $('uploadStatus').className = 'status warn';
+    $('uploadStatus').textContent = 'Stock rows cleared from Realtime Database.';
+  }catch(err){
+    $('uploadStatus').className = 'status error';
+    $('uploadStatus').textContent = `Error: ${err.message || err}`;
+  }
+});
+
+$('clearCountResults').addEventListener('click', async () => {
+  if (!confirm('Clear ALL scanner count results from Realtime Database?')) return;
+  try{ await resultsRef.remove(); }catch(_){}
+});
+
+$('exportCsv').addEventListener('click', () => {
+  if (!results.length) return;
+  const data = [
+    ['SCANNER_NAME','LOCATION','SSCC','PRODUCT','SYSTEM_QTY','COUNTED_QTY','DIFFERENCE','TIMESTAMP'],
+    ...results.map(r => [r.scannerName || '', r.location, r.sscc, r.name, r.systemQty, r.counted, r.variance, r.createdAt ? new Date(r.createdAt).toISOString() : ''])
+  ];
+  const csv = data.map(row => row.map(v => '"' + String(v ?? '').replace(/"/g, '""') + '"').join(';')).join('\r\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' }));
+  a.download = 'voorraad_telling_resultaten.csv';
+  a.click();
+  URL.revokeObjectURL(a.href);
+});
+
+function xmlEscape(s){
+  return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function colLetter(n){
+  let s = '';
+  while (n >= 0){ s = String.fromCharCode((n % 26) + 65) + s; n = Math.floor(n / 26) - 1; }
+  return s;
+}
+function buildSheetXml(matrix){
+  const rowsXml = matrix.map((row, rIdx) => {
+    const cellsXml = row.map((val, cIdx) => {
+      const ref = colLetter(cIdx) + (rIdx + 1);
+      if (typeof val === 'number' && Number.isFinite(val)) return `<c r="${ref}"><v>${val}</v></c>`;
+      return `<c r="${ref}" t="inlineStr"><is><t>${xmlEscape(val)}</t></is></c>`;
+    }).join('');
+    return `<row r="${rIdx + 1}">${cellsXml}</row>`;
+  }).join('');
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>${rowsXml}</sheetData></worksheet>`;
+}
+function buildZipStore(filesMap){
+  const enc = new TextEncoder();
+  const entries = Object.entries(filesMap).map(([name, content]) => {
+    const data = typeof content === 'string' ? enc.encode(content) : content;
+    return { name, data, crc: crc32(data) };
+  });
+  const localParts = [], cdParts = [];
+  let offset = 0;
+  for (const e of entries){
+    const nameBytes = enc.encode(e.name);
+    const lh = new Uint8Array(30 + nameBytes.length);
+    const lv = new DataView(lh.buffer);
+    lv.setUint32(0, 0x04034b50, true); lv.setUint16(4, 20, true); lv.setUint16(6, 0x0800, true);
+    lv.setUint32(14, e.crc, true); lv.setUint32(18, e.data.length, true); lv.setUint32(22, e.data.length, true); lv.setUint16(26, nameBytes.length, true);
+    lh.set(nameBytes, 30); localParts.push(lh, e.data);
+
+    const ch = new Uint8Array(46 + nameBytes.length);
+    const cv = new DataView(ch.buffer);
+    cv.setUint32(0, 0x02014b50, true); cv.setUint16(4, 20, true); cv.setUint16(6, 20, true); cv.setUint16(8, 0x0800, true);
+    cv.setUint32(16, e.crc, true); cv.setUint32(20, e.data.length, true); cv.setUint32(24, e.data.length, true); cv.setUint16(28, nameBytes.length, true); cv.setUint32(42, offset, true);
+    ch.set(nameBytes, 46); cdParts.push(ch);
+    offset += lh.length + e.data.length;
+  }
+  const cdSize = cdParts.reduce((a, b) => a + b.length, 0);
+  const eocd = new Uint8Array(22);
+  const ev = new DataView(eocd.buffer);
+  ev.setUint32(0, 0x06054b50, true); ev.setUint16(8, entries.length, true); ev.setUint16(10, entries.length, true);
+  ev.setUint32(12, cdSize, true); ev.setUint32(16, offset, true);
+  return new Blob([...localParts, ...cdParts, eocd], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+}
+
+$('exportXlsx').addEventListener('click', () => {
+  if (!results.length) return;
+  const matrix = [
+    ['SCANNER_NAME','LOCATION','SSCC','PRODUCT','SYSTEM_QTY','COUNTED_QTY','DIFFERENCE'],
+    ...results.map(r => [r.scannerName || '', r.location, r.sscc, r.name, parseNum(r.systemQty), Number(r.counted), Number(r.variance)])
+  ];
+  const zipBlob = buildZipStore({
+    '[Content_Types].xml': `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-ml/worksheet+xml"/></Types>`,
+    '_rels/.rels': `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>`,
+    'xl/workbook.xml': `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Sayim Sonuclari" sheetId="1" r:id="rId1"/></sheets></workbook>`,
+    'xl/_rels/workbook.xml.rels': `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/></Relationships>`,
+    'xl/worksheets/sheet1.xml': buildSheetXml(matrix)
+  });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(zipBlob);
+  a.download = 'voorraad_telling_resultaten.xlsx';
+  a.click();
+  URL.revokeObjectURL(a.href);
+});
+
+/* ==================== REALTIME DATABASE LISTENERS ==================== */
+stockRef.on('value', snap => {
+  const val = snap.val();
+  rows = Array.isArray(val) ? val.filter(Boolean) : (val ? Object.values(val) : []);
+  $('find').disabled = rows.length === 0 || !scannerName;
+  $('dbBadge').textContent = `DB Live • ${rows.length} rows`;
+  if (rows.length){
+    $('stockSyncStatus').className = 'status success';
+    $('stockSyncStatus').textContent = `Stock ready (${rows.length} rows). Enter your name and click Start Counting.`;
+    $('lookupStatus').className = 'status';
+    $('lookupStatus').textContent = 'Scan or enter LOCATION and SSCC.';
+  } else {
+    $('stockSyncStatus').className = 'status warn';
+    $('stockSyncStatus').textContent = 'No stock rows in Realtime DB yet. Admin must upload stock first.';
+    $('lookupStatus').className = 'status warn';
+    $('lookupStatus').textContent = 'No stock data available yet.';
+  }
+  renderAllSummaries();
+}, err => {
+  $('dbBadge').textContent = 'DB Error';
+  $('stockSyncStatus').className = 'status error';
+  $('stockSyncStatus').textContent = `Realtime DB error: ${err.message || err}`;
+});
+
+resultsRef.on('value', snap => {
+  const val = snap.val();
+  results = val ? Object.entries(val).map(([k, v]) => ({ _key: k, ...v })).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)) : [];
+  renderAllSummaries();
+});
+
+const savedName = localStorage.getItem(NAME_KEY);
+if (savedName) $('scannerNameInput').value = savedName;
+</script>
+</body>
+</html>
